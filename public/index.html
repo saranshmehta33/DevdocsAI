@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>DevDocs AI — Codebase Q&A</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --card: #171a21;
+    --border: #2a2e38;
+    --text: #e6e8ec;
+    --muted: #8b90a0;
+    --accent: #6366f1;
+    --accent-hover: #4f52d6;
+    --success: #22c55e;
+    --error: #ef4444;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 40px 20px;
+  }
+  .container { max-width: 720px; margin: 0 auto; }
+  h1 { font-size: 1.6rem; margin-bottom: 4px; }
+  .subtitle { color: var(--muted); margin-bottom: 32px; font-size: 0.95rem; }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 24px;
+  }
+  .card h2 { font-size: 1.05rem; margin: 0 0 16px; }
+
+  input, select, textarea {
+    width: 100%;
+    padding: 10px 12px;
+    background: #0d0f14;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-size: 0.9rem;
+    margin-bottom: 12px;
+  }
+  input:focus, select:focus, textarea:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+
+  button {
+    background: var(--accent);
+    color: white;
+    border: none;
+    padding: 10px 18px;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+  }
+  button:hover { background: var(--accent-hover); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .status-line {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 12px;
+    font-size: 0.85rem;
+    color: var(--muted);
+  }
+  .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--muted);
+  }
+  .dot.indexing { background: #f59e0b; animation: pulse 1.2s infinite; }
+  .dot.ready { background: var(--success); }
+  .dot.failed { background: var(--error); }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+  .answer-box {
+    background: #0d0f14;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    margin-top: 16px;
+    font-size: 0.9rem;
+    line-height: 1.5;
+    white-space: pre-wrap;
+  }
+  .sources {
+    margin-top: 10px;
+    font-size: 0.8rem;
+    color: var(--muted);
+  }
+  .sources code {
+    background: #1e2129;
+    padding: 2px 6px;
+    border-radius: 4px;
+    margin-right: 4px;
+  }
+
+  .repo-list { font-size: 0.85rem; color: var(--muted); }
+  .repo-list .repo-item {
+    padding: 6px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .repo-list .repo-item:last-child { border-bottom: none; }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <h1>DevDocs AI</h1>
+  <p class="subtitle">Ask questions about any GitHub codebase, grounded in the actual source.</p>
+
+  <!-- INDEX A REPO -->
+  <div class="card">
+    <h2>1. Index a repository</h2>
+    <input id="repoUrlInput" type="text" placeholder="https://github.com/owner/repo" />
+    <button id="indexBtn" onclick="startIndexing()">Index Repository</button>
+    <div class="status-line" id="indexStatusLine" style="display:none;">
+      <span class="dot" id="statusDot"></span>
+      <span id="statusText">—</span>
+    </div>
+  </div>
+
+  <!-- QUERY A REPO -->
+  <div class="card">
+    <h2>2. Ask a question</h2>
+    <select id="repoSelect">
+      <option value="">Select an indexed repository…</option>
+    </select>
+    <textarea id="questionInput" rows="2" placeholder="e.g. How does authentication work here?"></textarea>
+    <button id="askBtn" onclick="askQuestion()">Ask</button>
+
+    <div id="answerContainer" style="display:none;">
+      <div class="answer-box" id="answerText"></div>
+      <div class="sources" id="sourcesText"></div>
+    </div>
+  </div>
+
+  <!-- INDEXED REPOS -->
+  <div class="card">
+    <h2>Indexed repositories</h2>
+    <div class="repo-list" id="repoList">Loading…</div>
+  </div>
+</div>
+
+<script>
+  const API_BASE = '/api/v1';
+  let pollInterval = null;
+
+  // ── Index a repository ──────────────────────────────────────────────
+  async function startIndexing() {
+    const repoUrl = document.getElementById('repoUrlInput').value.trim();
+    if (!repoUrl) return;
+
+    const btn = document.getElementById('indexBtn');
+    btn.disabled = true;
+
+    const statusLine = document.getElementById('indexStatusLine');
+    statusLine.style.display = 'flex';
+    setStatus('indexing', 'Starting…');
+
+    try {
+      const res = await fetch(`${API_BASE}/repos/index`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ repoUrl }),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        setStatus('failed', data.message || 'Failed to start indexing');
+        btn.disabled = false;
+        return;
+      }
+
+      pollStatus(data.repoId);
+    } catch (err) {
+      setStatus('failed', 'Network error — is the server running?');
+      btn.disabled = false;
+    }
+  }
+
+  function pollStatus(repoId) {
+    clearInterval(pollInterval);
+    pollInterval = setInterval(async () => {
+      const res = await fetch(`${API_BASE}/repos/${repoId}/status`);
+      const data = await res.json();
+
+      if (data.status === 'indexing') {
+        setStatus('indexing', `Indexing… (${data.fileCount || 0} files so far)`);
+      } else if (data.status === 'ready') {
+        setStatus('ready', `Ready — ${data.fileCount} files, ${data.chunkCount} chunks indexed`);
+        clearInterval(pollInterval);
+        document.getElementById('indexBtn').disabled = false;
+        loadRepoList();
+      } else if (data.status === 'failed') {
+        setStatus('failed', data.errorMessage || 'Indexing failed');
+        clearInterval(pollInterval);
+        document.getElementById('indexBtn').disabled = false;
+      }
+    }, 2000);
+  }
+
+  function setStatus(state, text) {
+    document.getElementById('statusDot').className = `dot ${state}`;
+    document.getElementById('statusText').textContent = text;
+  }
+
+  // ── Ask a question ──────────────────────────────────────────────────
+  async function askQuestion() {
+    const repoId = document.getElementById('repoSelect').value;
+    const question = document.getElementById('questionInput').value.trim();
+    if (!repoId || !question) return;
+
+    const btn = document.getElementById('askBtn');
+    btn.disabled = true;
+    btn.textContent = 'Thinking…';
+
+    const container = document.getElementById('answerContainer');
+    container.style.display = 'block';
+    document.getElementById('answerText').textContent = '';
+    document.getElementById('sourcesText').textContent = '';
+
+    try {
+      const res = await fetch(`${API_BASE}/repos/${repoId}/query`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question }),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        document.getElementById('answerText').textContent = data.message || 'Query failed';
+      } else {
+        document.getElementById('answerText').textContent = data.answer;
+        const sourcesHtml = (data.sources || [])
+          .map((s) => `<code>${s}</code>`)
+          .join('');
+        document.getElementById('sourcesText').innerHTML = sourcesHtml
+          ? `Sources: ${sourcesHtml}`
+          : '';
+      }
+    } catch (err) {
+      document.getElementById('answerText').textContent = 'Network error — is the server running?';
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Ask';
+    }
+  }
+
+  // ── Load list of indexed repos (for dropdown + display) ─────────────
+  async function loadRepoList() {
+    try {
+      const res = await fetch(`${API_BASE}/repos`);
+      const repos = await res.json();
+
+      const listEl = document.getElementById('repoList');
+      const selectEl = document.getElementById('repoSelect');
+
+      if (repos.length === 0) {
+        listEl.textContent = 'No repositories indexed yet.';
+        return;
+      }
+
+      listEl.innerHTML = repos
+        .map((r) => `<div class="repo-item">${r.repoUrl} — <strong>${r.status}</strong> (${r.chunkCount} chunks)</div>`)
+        .join('');
+
+      // Repopulate dropdown, keeping the currently selected value if still present
+      const currentSelection = selectEl.value;
+      selectEl.innerHTML = '<option value="">Select an indexed repository…</option>' +
+        repos
+          .filter((r) => r.status === 'ready')
+          .map((r) => `<option value="${r.repoId}">${r.repoUrl}</option>`)
+          .join('');
+      selectEl.value = currentSelection;
+    } catch (err) {
+      document.getElementById('repoList').textContent = 'Could not load repositories.';
+    }
+  }
+
+  // Load repo list on page load
+  loadRepoList();
+</script>
+
+</body>
+</html>

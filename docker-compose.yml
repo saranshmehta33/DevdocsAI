@@ -1,0 +1,39 @@
+services:
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+    depends_on:
+      - qdrant
+      - mongodb
+    environment:
+      # Inside Docker's network, containers reach each other by service
+      # name, not localhost/127.0.0.1 — "qdrant" and "mongodb" below are
+      # the service names defined in this same file.
+      - QDRANT_URL=http://qdrant:6333
+      - MONGODB_URI=mongodb://mongodb:27017/devdocs-ai
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+      - PORT=3000
+    volumes:
+      # Persist the downloaded embedding model across container restarts
+      - model_cache:/app/.cache
+
+  qdrant:
+    image: qdrant/qdrant
+    ports:
+      - "6333:6333"
+    volumes:
+      - qdrant_data:/qdrant/storage
+
+  mongodb:
+    image: mongo:7
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+
+volumes:
+  qdrant_data:
+  mongo_data:
+  model_cache:
