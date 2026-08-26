@@ -13,7 +13,7 @@ export interface RagResponse {
 export class RetrievalService {
     private readonly logger = new Logger(RetrievalService.name);
     private groq!: Groq;
-    private readonly MODEL = 'llama-3.3-70b-versatile';
+    private readonly MODEL = 'openai/gpt-oss-120b';
     private readonly TOP_K = 5;
 
     constructor(
