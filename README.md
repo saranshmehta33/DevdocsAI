@@ -11,7 +11,7 @@ DevDocs AI is a NestJS backend that indexes a GitHub repository into a vector da
 ![LangChain](https://img.shields.io/badge/LangChain-1C3C3C)
 ![Docker](https://img.shields.io/badge/Docker-2496ED?logo=docker&logoColor=white)
 
-**Live demo:** `<add your Render URL here>` (free tier, so the first request after idle can take 30-60 seconds to wake up)
+**Live demo:** [https://devdocsai-mc2q.onrender.com](https://devdocsai-mc2q.onrender.com) (free tier, so the first request after idle can take 30-60 seconds to wake up)
 
 <!-- Add a screenshot or GIF of the UI here:
 ![DevDocs AI screenshot](docs/screenshot.png)
