@@ -303,4 +303,4 @@ Run against <repo>, N questions, <environment>:
 
 ## License
 
-Add a `LICENSE` file of your choice (MIT is a common default for portfolio projects).
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
